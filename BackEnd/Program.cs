@@ -1,9 +1,15 @@
+using Microsoft.Extensions.Options;
+
 // Загружаем .env в переменные окружения процесса.
 DotNetEnv.Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<ApiCredentials>(builder.Configuration.GetSection("ApiCredentials"));
+
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
 // Регистрируем типизированный HttpClient.
 // Фабрика создаёт и переиспользует HttpClient — не делаем new HttpClient() вручную.
@@ -12,7 +18,7 @@ builder.Services.AddHttpClient<INomenclatureHttpService, NomenclatureHttpService
 {
     // Достаём заполненные настройки из DI
     var credentials = serviceProvider
-        .GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiCredentials>>()
+        .GetRequiredService<IOptions<ApiCredentials>>()
         .Value;
 
     // Адрес сервера
@@ -30,6 +36,8 @@ builder.Services.AddHttpClient<INomenclatureHttpService, NomenclatureHttpService
 });
 
 var app = builder.Build();
+
+app.UseCors();
 
 app.MapGet("/", async (
     INomenclatureHttpService nomenclatureService,   // DI подставит сервис автоматически
