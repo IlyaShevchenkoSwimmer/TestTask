@@ -2,9 +2,7 @@
 // (свойство = строка и значение = элемент JSON)
 using Record = System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>;
 
-/// <summary>
-/// Контракт сервиса — удобно подменять в тестах.
-/// </summary>
+// контракт: описывает, что сервис умеет, но не как. Нужен для DI
 public interface INomenclatureHttpService
 {
     Task<HttpRequestResult<IReadOnlyList<Record>>> GetNomenclatureAsync(

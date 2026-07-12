@@ -1,17 +1,29 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   fetchNomenclature,
   setSearchQuery,
   setColumnFilter,
+  setNumericFilter,
+  setDateFilter,
   clearFilters,
 } from "./nomenclatureSlice";
 import type { JsonValue } from "./types";
+import {
+  detectColumnType,
+  formatDate,
+  isIsoDateTime,
+  type ColumnType,
+} from "./format";
 import "./NomenclatureTable.css";
+
+// Сколько строк дорисовывать за одну «порцию»
+const PAGE_SIZE = 50;
 
 function renderCell(value: JsonValue): string {
   if (value === null) return "";
   if (typeof value === "boolean") return value ? "Да" : "Нет";
+  if (isIsoDateTime(value)) return formatDate(value);
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
@@ -63,9 +75,15 @@ function TableSkeleton({
 
 export function NomenclatureTable() {
   const dispatch = useAppDispatch();
-  const { items, status, error, searchQuery, columnFilters } = useAppSelector(
-    (state) => state.nomenclature,
-  );
+  const {
+    items,
+    status,
+    error,
+    searchQuery,
+    columnFilters,
+    numericFilters,
+    dateFilters,
+  } = useAppSelector((state) => state.nomenclature);
 
   useEffect(() => {
     dispatch(fetchNomenclature());
@@ -76,45 +94,113 @@ export function NomenclatureTable() {
     [items],
   );
 
-  // Тип значения каждой колонки (по первому объекту) — для булевых делаем select.
   const columnTypes = useMemo(() => {
-    const map: Record<string, string> = {};
-    if (items.length > 0) {
-      for (const col of columns) map[col] = typeof items[0][col];
-    }
+    const map: Record<string, ColumnType> = {};
+    for (const col of columns) map[col] = detectColumnType(items, col);
     return map;
   }, [items, columns]);
 
-  // --- Фильтрация: глобальный поиск + фильтры по колонкам ---
+  // --- Фильтрация ---
   const filteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const activeFilters = Object.entries(columnFilters).filter(([, v]) => v);
+    const activeText = Object.entries(columnFilters).filter(([, v]) => v);
+    const activeNumeric = Object.entries(numericFilters);
+    const activeDate = Object.entries(dateFilters);
 
     return items.filter((item) => {
-      // 1. Глобальный поиск: хотя бы одна ячейка содержит подстроку
+      // 1. Глобальный поиск
       if (query) {
-        const matchesGlobal = columns.some((col) =>
+        const matches = columns.some((col) =>
           renderCell(item[col]).toLowerCase().includes(query),
         );
-        if (!matchesGlobal) return false;
+        if (!matches) return false;
       }
 
-      // 2. Фильтры по колонкам: должны совпасть ВСЕ активные
-      for (const [col, value] of activeFilters) {
+      // 2. Текст / boolean
+      for (const [col, value] of activeText) {
         if (columnTypes[col] === "boolean") {
-          // value = 'true' | 'false', сравниваем точно
           if (String(item[col]) !== value) return false;
-        } else {
-          if (
-            !renderCell(item[col]).toLowerCase().includes(value.toLowerCase())
-          )
-            return false;
+        } else if (
+          !renderCell(item[col]).toLowerCase().includes(value.toLowerCase())
+        ) {
+          return false;
         }
+      }
+
+      // 3. Числовые диапазоны
+      for (const [col, range] of activeNumeric) {
+        const v = item[col];
+        const minNum = range.min !== "" ? Number(range.min) : null;
+        const maxNum = range.max !== "" ? Number(range.max) : null;
+        if (minNum !== null && !Number.isNaN(minNum)) {
+          if (typeof v !== "number" || v < minNum) return false;
+        }
+        if (maxNum !== null && !Number.isNaN(maxNum)) {
+          if (typeof v !== "number" || v > maxNum) return false;
+        }
+      }
+
+      // 4. Диапазоны дат (сравниваем part "YYYY-MM-DD" как строки)
+      for (const [col, range] of activeDate) {
+        const v = item[col];
+        if (!isIsoDateTime(v)) {
+          if (range.from || range.to) return false;
+          continue;
+        }
+        const datePart = v.slice(0, 10); // "2026-06-26"
+        if (range.from && datePart < range.from) return false;
+        if (range.to && datePart > range.to) return false;
       }
 
       return true;
     });
-  }, [items, columns, columnTypes, searchQuery, columnFilters]);
+  }, [
+    items,
+    columns,
+    columnTypes,
+    searchQuery,
+    columnFilters,
+    numericFilters,
+    dateFilters,
+  ]);
+
+  // --- Динамическая подгрузка при прокрутке ---
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Актуальное число отфильтрованных строк — в ref, чтобы избежать
+  // «устаревшего» значения внутри колбэка наблюдателя.
+  const totalRef = useRef(0);
+  totalRef.current = filteredItems.length;
+
+  // При смене результата фильтрации сбрасываем счётчик к первой порции.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [filteredItems]);
+
+  // IntersectionObserver: как только «маячок» внизу попал в зону видимости —
+  // дорисовываем следующую порцию.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) =>
+            Math.min(prev + PAGE_SIZE, totalRef.current),
+          );
+        }
+      },
+      { rootMargin: "300px" }, // начинаем подгружать чуть заранее
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [status]); // пере-подписываемся, когда таблица появляется/меняет состояние
+
+  const visibleItems = filteredItems.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredItems.length;
 
   const handleRefresh = () => dispatch(fetchNomenclature());
 
@@ -124,11 +210,13 @@ export function NomenclatureTable() {
   const isRefreshing = isLoading && hasData;
 
   const hasActiveFilters =
-    searchQuery.trim() !== "" || Object.keys(columnFilters).length > 0;
+    searchQuery.trim() !== "" ||
+    Object.keys(columnFilters).length > 0 ||
+    Object.keys(numericFilters).length > 0 ||
+    Object.keys(dateFilters).length > 0;
 
   return (
     <div className="page">
-      {/* Панель управления */}
       <div className="toolbar">
         <input
           className="search-input"
@@ -169,34 +257,124 @@ export function NomenclatureTable() {
           >
             <table className="data-table">
               <thead>
-                {/* Строка заголовков */}
                 <tr>
                   {columns.map((col) => (
                     <th key={col}>{col}</th>
                   ))}
                 </tr>
-                {/* Строка фильтров по колонкам */}
                 <tr className="filter-row">
-                  {columns.map((col) => (
-                    <th key={col}>
-                      {columnTypes[col] === "boolean" ? (
-                        <select
-                          className="filter-select"
-                          value={columnFilters[col] ?? ""}
-                          onChange={(e) =>
-                            dispatch(
-                              setColumnFilter({
-                                column: col,
-                                value: e.target.value,
-                              }),
-                            )
-                          }
-                        >
-                          <option value="">Все</option>
-                          <option value="true">Да</option>
-                          <option value="false">Нет</option>
-                        </select>
-                      ) : (
+                  {columns.map((col) => {
+                    const type = columnTypes[col];
+
+                    // Числовой диапазон
+                    if (type === "number") {
+                      const range = numericFilters[col] ?? { min: "", max: "" };
+                      return (
+                        <th key={col}>
+                          <div className="filter-range">
+                            <input
+                              className="filter-input filter-range-input"
+                              type="number"
+                              placeholder="От"
+                              value={range.min}
+                              onChange={(e) =>
+                                dispatch(
+                                  setNumericFilter({
+                                    column: col,
+                                    bound: "min",
+                                    value: e.target.value,
+                                  }),
+                                )
+                              }
+                            />
+                            <input
+                              className="filter-input filter-range-input"
+                              type="number"
+                              placeholder="До"
+                              value={range.max}
+                              onChange={(e) =>
+                                dispatch(
+                                  setNumericFilter({
+                                    column: col,
+                                    bound: "max",
+                                    value: e.target.value,
+                                  }),
+                                )
+                              }
+                            />
+                          </div>
+                        </th>
+                      );
+                    }
+
+                    // Диапазон дат
+                    if (type === "date") {
+                      const range = dateFilters[col] ?? { from: "", to: "" };
+                      return (
+                        <th key={col}>
+                          <div className="filter-range filter-range-date">
+                            <input
+                              className="filter-input filter-date-input"
+                              type="date"
+                              title="С"
+                              value={range.from}
+                              onChange={(e) =>
+                                dispatch(
+                                  setDateFilter({
+                                    column: col,
+                                    bound: "from",
+                                    value: e.target.value,
+                                  }),
+                                )
+                              }
+                            />
+                            <input
+                              className="filter-input filter-date-input"
+                              type="date"
+                              title="По"
+                              value={range.to}
+                              onChange={(e) =>
+                                dispatch(
+                                  setDateFilter({
+                                    column: col,
+                                    bound: "to",
+                                    value: e.target.value,
+                                  }),
+                                )
+                              }
+                            />
+                          </div>
+                        </th>
+                      );
+                    }
+
+                    // Boolean
+                    if (type === "boolean") {
+                      return (
+                        <th key={col}>
+                          <select
+                            className="filter-select"
+                            value={columnFilters[col] ?? ""}
+                            onChange={(e) =>
+                              dispatch(
+                                setColumnFilter({
+                                  column: col,
+                                  value: e.target.value,
+                                }),
+                              )
+                            }
+                          >
+                            <option value="">Все</option>
+                            <option value="true">Да</option>
+                            <option value="false">Нет</option>
+                          </select>
+                        </th>
+                      );
+                    }
+
+                    // Текст
+                    return (
+                      <th key={col}>
                         <input
                           className="filter-input"
                           type="text"
@@ -211,13 +389,13 @@ export function NomenclatureTable() {
                             )
                           }
                         />
-                      )}
-                    </th>
-                  ))}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {filteredItems.map((item, rowIndex) => (
+                {visibleItems.map((item, rowIndex) => (
                   <tr key={rowIndex}>
                     {columns.map((col) => (
                       <td key={col}>{renderCell(item[col])}</td>
@@ -228,12 +406,21 @@ export function NomenclatureTable() {
             </table>
           </div>
 
-          {/* Сообщение, если фильтры ничего не нашли */}
           {filteredItems.length === 0 && (
             <div className="no-results">
               Ничего не найдено по заданным условиям.
             </div>
           )}
+
+          {/* Счётчик + «маячок» для подгрузки */}
+          {filteredItems.length > 0 && (
+            <div className="table-footer">
+              Показано {visibleItems.length} из {filteredItems.length}
+            </div>
+          )}
+          {/* невидимый элемент-триггер внизу таблицы */}
+          <div ref={sentinelRef} className="scroll-sentinel" />
+          {hasMore && <div className="loading-more">Загрузка…</div>}
 
           {isRefreshing && (
             <div className="refresh-overlay">

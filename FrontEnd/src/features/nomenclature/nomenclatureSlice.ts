@@ -6,16 +6,28 @@ import type {
   NomenclatureResponse,
 } from "./types";
 
-const API_URL = "http://localhost:5000/";
+const API_URL = "http://localhost:5000/api/nomenclature/";
 
 type Status = "idle" | "loading" | "succeeded" | "failed";
+
+interface NumericRange {
+  min: string;
+  max: string;
+}
+
+interface DateRange {
+  from: string; // формат "YYYY-MM-DD"
+  to: string;
+}
 
 interface NomenclatureState {
   items: NomenclatureItem[];
   status: Status;
   error: string | null;
   searchQuery: string;
-  columnFilters: Record<string, string>; // имя колонки -> строка фильтра
+  columnFilters: Record<string, string>;
+  numericFilters: Record<string, NumericRange>;
+  dateFilters: Record<string, DateRange>;
 }
 
 const initialState: NomenclatureState = {
@@ -24,6 +36,8 @@ const initialState: NomenclatureState = {
   error: null,
   searchQuery: "",
   columnFilters: {},
+  numericFilters: {},
+  dateFilters: {},
 };
 
 async function extractErrorMessage(response: Response): Promise<string> {
@@ -44,7 +58,6 @@ export const fetchNomenclature = createAsyncThunk<
   { rejectValue: string }
 >("nomenclature/fetch", async (_, { rejectWithValue }) => {
   let response: Response;
-
   try {
     response = await fetch(API_URL, {
       headers: { Accept: "application/json" },
@@ -52,11 +65,9 @@ export const fetchNomenclature = createAsyncThunk<
   } catch {
     return rejectWithValue("Не удалось соединиться с сервером.");
   }
-
   if (!response.ok) {
     return rejectWithValue(await extractErrorMessage(response));
   }
-
   try {
     const data = (await response.json()) as unknown;
     if (!Array.isArray(data)) {
@@ -80,15 +91,42 @@ const nomenclatureSlice = createSlice({
       action: PayloadAction<{ column: string; value: string }>,
     ) {
       const { column, value } = action.payload;
-      if (value) {
-        state.columnFilters[column] = value;
-      } else {
-        delete state.columnFilters[column]; // пустой фильтр удаляем
-      }
+      if (value) state.columnFilters[column] = value;
+      else delete state.columnFilters[column];
+    },
+    setNumericFilter(
+      state,
+      action: PayloadAction<{
+        column: string;
+        bound: "min" | "max";
+        value: string;
+      }>,
+    ) {
+      const { column, bound, value } = action.payload;
+      const current = state.numericFilters[column] ?? { min: "", max: "" };
+      const updated = { ...current, [bound]: value };
+      if (!updated.min && !updated.max) delete state.numericFilters[column];
+      else state.numericFilters[column] = updated;
+    },
+    setDateFilter(
+      state,
+      action: PayloadAction<{
+        column: string;
+        bound: "from" | "to";
+        value: string;
+      }>,
+    ) {
+      const { column, bound, value } = action.payload;
+      const current = state.dateFilters[column] ?? { from: "", to: "" };
+      const updated = { ...current, [bound]: value };
+      if (!updated.from && !updated.to) delete state.dateFilters[column];
+      else state.dateFilters[column] = updated;
     },
     clearFilters(state) {
       state.searchQuery = "";
       state.columnFilters = {};
+      state.numericFilters = {};
+      state.dateFilters = {};
     },
   },
   extraReducers: (builder) => {
@@ -113,7 +151,12 @@ const nomenclatureSlice = createSlice({
   },
 });
 
-export const { setSearchQuery, setColumnFilter, clearFilters } =
-  nomenclatureSlice.actions;
+export const {
+  setSearchQuery,
+  setColumnFilter,
+  setNumericFilter,
+  setDateFilter,
+  clearFilters,
+} = nomenclatureSlice.actions;
 
 export default nomenclatureSlice.reducer;

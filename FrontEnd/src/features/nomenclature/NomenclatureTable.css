@@ -261,6 +261,63 @@
   background: #ece9fb;
 }
 
+/* ===== Числовой фильтр-диапазон ===== */
+.filter-range {
+  display: flex;
+  gap: 6px;
+}
+
+.filter-range-input {
+  width: 50%;
+  min-width: 0; /* чтобы поля не распирали ячейку */
+}
+
+/* убираем стрелки у number-инпутов (по желанию, для минимализма) */
+.filter-range-input::-webkit-outer-spin-button,
+.filter-range-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.filter-range-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ===== Диапазон дат ===== */
+.filter-range-date {
+  flex-direction: column; /* два поля даты — друг под другом, места мало */
+  gap: 4px;
+}
+
+.filter-date-input {
+  width: 100%;
+  font-size: 12px;
+  padding: 6px 8px;
+  color: #2d2d3a;
+}
+
+/* ===== Подвал таблицы и подгрузка ===== */
+.table-footer {
+  padding: 12px 18px;
+  font-size: 13px;
+  color: #6b6b7b;
+  background: #f7f6fb;
+  border-top: 1px solid #eceaf3;
+  text-align: right;
+}
+
+.loading-more {
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
+  color: #6246ea;
+  background: #f7f6fb;
+}
+
+.scroll-sentinel {
+  height: 1px; /* невидимый триггер подгрузки */
+}
+
 /* ===== Сообщения ===== */
 .error-box {
   width: 100%;

@@ -20,12 +20,23 @@ public sealed class NomenclatureHttpService : INomenclatureHttpService
     {
         PropertyNameCaseInsensitive = true
     };
+
+    private const string _requestText =
+        "ВЫБРАТЬ " +
+        "Номенклатура.Наименование КАК Наименование, " +
+        "Номенклатура.Код КАК Артикул, " +
+        "Номенклатура.Цена КАК Цена, " +
+        "Номенклатура.ДатаПоставки КАК Дата_поставки, " +
+        "Номенклатура.ЕдиницаИзмерения КАК Единица_измерения, " +
+        "Номенклатура.Ссылка КАК Ссылка " +
+        "ИЗ Справочник.Номенклатура КАК Номенклатура";
+
     public NomenclatureHttpService(
         HttpClient httpClient,
         ILogger<NomenclatureHttpService> logger)
     {
         _httpClient = httpClient;
-        _logger = logger;
+        _logger = logger; 
     }
     public async Task<HttpRequestResult<IReadOnlyList<Record>>> GetNomenclatureAsync(
         CancellationToken cancellationToken = default)
@@ -33,10 +44,11 @@ public sealed class NomenclatureHttpService : INomenclatureHttpService
         // Относительный путь. BaseAddress задаётся в Program.cs
         const string requestUri = "Test/hs/api/v1/Request";
 
-        // 1. Создаём объект с данными (или получаем его как параметр)
+        // Создаём объект с данными (или получаем его как параметр)
      var request = new NomenclatureRequestDto
      {
-         requestText = "ВЫБРАТЬ Номенклатура.ДатаПоставки КАК ДатаПоставки, Номенклатура.ПометкаУдаления КАК ПометкаУдаления, Номенклатура.ЕдиницаИзмерения КАК ЕдИзмер, Номенклатура.Ссылка КАК Ссылка, Номенклатура.Наименование КАК Наименование, Номенклатура.Код КАК Артикул, Номенклатура.Цена КАК Цена ИЗ Справочник.Номенклатура КАК Номенклатура"
+        RequestText = _requestText
+          
     };
     // 2. Сериализуем объект в JSON-строку
     var jsonOptions = new JsonSerializerOptions
@@ -54,8 +66,7 @@ public sealed class NomenclatureHttpService : INomenclatureHttpService
 
         try
         {
-            // GET-запрос.
-            // ResponseHeadersRead — начинаем читать тело только после заголовков (экономия памяти).
+            // POST-запрос к АПИ 1С, чтобы передавать еще и текст запроса 1С в теле
             using HttpResponseMessage response = await _httpClient.PostAsync(
                 requestUri,
                 content,
@@ -156,9 +167,7 @@ public sealed class NomenclatureHttpService : INomenclatureHttpService
             _ => $"Сервис вернул ошибку ({statusCode})."
         };
     }
-    /// <summary>
     /// Обрезает длинный текст ответа для логов.
-    /// </summary>
     private static string Truncate(string value, int maxLength = 500) =>
         value.Length <= maxLength ? value : value[..maxLength] + "...";
 }
