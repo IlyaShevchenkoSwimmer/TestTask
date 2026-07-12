@@ -170,6 +170,14 @@
   position: relative; /* нужно для позиционирования оверлея */
 }
 
+.table-title {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
 .refresh-overlay {
   position: absolute;
   inset: 0; /* растягиваем на всю карточку */

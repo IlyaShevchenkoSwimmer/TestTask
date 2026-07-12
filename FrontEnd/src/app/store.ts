@@ -1,9 +1,11 @@
 import { configureStore } from "@reduxjs/toolkit";
 import nomenclatureReducer from "../features/nomenclature/nomenclatureSlice";
+import remainsReducer from "../features/remains/remainsSlice";
 
 export const store = configureStore({
   reducer: {
     nomenclature: nomenclatureReducer,
+    remains: remainsReducer,
   },
 });
 

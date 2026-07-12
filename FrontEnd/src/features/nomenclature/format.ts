@@ -39,3 +39,12 @@ export function detectColumnType(
 export function formatColumnName(col: string): string {
   return col.replace(/_/g, " ");
 }
+
+// Отображение значения в ячейке (общее для обеих таблиц)
+export function renderCell(value: JsonValue): string {
+  if (value === null) return "";
+  if (typeof value === "boolean") return value ? "Да" : "Нет";
+  if (isIsoDateTime(value)) return formatDate(value);
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}

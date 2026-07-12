@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   fetchNomenclature,
@@ -8,71 +8,17 @@ import {
   setDateFilter,
   clearFilters,
 } from "./nomenclatureSlice";
-import type { JsonValue } from "./types";
+import { fetchRemains } from "../remains/remainsSlice";
 import {
   detectColumnType,
   formatColumnName,
-  formatDate,
   isIsoDateTime,
+  renderCell,
   type ColumnType,
 } from "./format";
+import { TableSkeleton } from "../../components/TableSkeleton"; // ← общий
+import { useInfiniteScroll } from "../../hooks/useInfiniteScroll"; // ← общий
 import "./NomenclatureTable.css";
-
-// Сколько строк дорисовывать за одну «порцию»
-const PAGE_SIZE = 50;
-
-function renderCell(value: JsonValue): string {
-  if (value === null) return "";
-  if (typeof value === "boolean") return value ? "Да" : "Нет";
-  if (isIsoDateTime(value)) return formatDate(value);
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
-// --- Скелетон (без изменений) ---
-function TableSkeleton({
-  columnCount,
-  rowCount = 6,
-}: {
-  columnCount: number;
-  rowCount?: number;
-}) {
-  const cols = Array.from({ length: columnCount });
-  const rows = Array.from({ length: rowCount });
-  return (
-    <div className="table-card">
-      <div className="table-scroll">
-        <table className="data-table">
-          <thead>
-            <tr>
-              {cols.map((_, i) => (
-                <th key={i}>
-                  <div className="skeleton-bar" style={{ width: "70%" }} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((_, rowIndex) => (
-              <tr key={rowIndex}>
-                {cols.map((_, colIndex) => (
-                  <td key={colIndex}>
-                    <div
-                      className="skeleton-bar"
-                      style={{
-                        width: `${60 + ((rowIndex + colIndex) % 4) * 10}%`,
-                      }}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 export function NomenclatureTable() {
   const dispatch = useAppDispatch();
@@ -165,45 +111,14 @@ export function NomenclatureTable() {
     dateFilters,
   ]);
 
-  // --- Динамическая подгрузка при прокрутке ---
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // вместо всей ручной логики visibleCount / IntersectionObserver:
+  const { visibleItems, hasMore, sentinelRef } =
+    useInfiniteScroll(filteredItems);
 
-  // Актуальное число отфильтрованных строк — в ref, чтобы избежать
-  // «устаревшего» значения внутри колбэка наблюдателя.
-  const totalRef = useRef(0);
-  totalRef.current = filteredItems.length;
-
-  // При смене результата фильтрации сбрасываем счётчик к первой порции.
-  useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [filteredItems]);
-
-  // IntersectionObserver: как только «маячок» внизу попал в зону видимости —
-  // дорисовываем следующую порцию.
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleCount((prev) =>
-            Math.min(prev + PAGE_SIZE, totalRef.current),
-          );
-        }
-      },
-      { rootMargin: "300px" }, // начинаем подгружать чуть заранее
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [status]); // пере-подписываемся, когда таблица появляется/меняет состояние
-
-  const visibleItems = filteredItems.slice(0, visibleCount);
-  const hasMore = visibleCount < filteredItems.length;
-
-  const handleRefresh = () => dispatch(fetchNomenclature());
+  const handleRefresh = () => {
+    dispatch(fetchNomenclature());
+    dispatch(fetchRemains());
+  };
 
   const isLoading = status === "loading";
   const hasData = items.length > 0;
@@ -403,6 +318,7 @@ export function NomenclatureTable() {
                     ))}
                   </tr>
                 ))}
+                <div ref={sentinelRef} className="scroll-sentinel" />
               </tbody>
             </table>
           </div>

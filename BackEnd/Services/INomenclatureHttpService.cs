@@ -7,4 +7,8 @@ public interface INomenclatureHttpService
 {
     Task<HttpRequestResult<IReadOnlyList<Record>>> GetNomenclatureAsync(
         CancellationToken cancellationToken = default);
+
+    // Новый метод — остатки (GET, без тела)
+    Task<HttpRequestResult<IReadOnlyList<Record>>> GetRemainsAsync(
+        CancellationToken cancellationToken = default);
 }

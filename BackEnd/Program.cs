@@ -57,4 +57,20 @@ app.MapGet("/api/nomenclature/request/", async (
     return Results.Ok(result.Data);
 });
 
+app.MapGet("/api/nomenclature/remains", async (
+    INomenclatureHttpService nomenclatureService,
+    CancellationToken cancellationToken) =>
+{
+    var result = await nomenclatureService.GetRemainsAsync(cancellationToken);
+
+    if (!result.IsSuccess)
+    {
+        return Results.Json(
+            new { error = result.ErrorMessage },
+            statusCode: result.StatusCode ?? StatusCodes.Status502BadGateway);
+    }
+
+    return Results.Ok(result.Data);
+});
+
 app.Run();
