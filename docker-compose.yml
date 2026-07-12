@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./BackEnd
+    container_name: myapp-backend
+    # Секреты (логин/пароль/RequestText) берём из backend/.env
+    env_file:
+      - ./BackEnd/.env
+    # Переопределяем то, что в Docker должно отличаться
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      # ВАЖНО: 1С крутится на ХОСТЕ, а не в контейнере.
+      # Внутри контейнера "localhost" — это сам контейнер!
+      - ApiCredentials__BaseAddress=http://host.docker.internal:8080/
+    # Чтобы host.docker.internal работал и на Linux:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    expose:
+      - "8080" # доступен внутри docker-сети, наружу не публикуем
+
+  frontend:
+    build:
+      context: ./FrontEnd
+    container_name: myapp-frontend
+    ports:
+      - "3000:80" # приложение будет на http://localhost:3000
+    depends_on:
+      - backend

@@ -1,7 +1,8 @@
 using Microsoft.Extensions.Options;
 
 // Загружаем .env в переменные окружения процесса.
-DotNetEnv.Env.Load();
+if (File.Exists(".env"))
+    DotNetEnv.Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -6,7 +6,7 @@ import type {
   NomenclatureResponse,
 } from "../nomenclature/types";
 
-const API_URL = "http://localhost:5000/api/nomenclature/remains";
+const API_URL = "/api/nomenclature/remains";
 
 type Status = "idle" | "loading" | "succeeded" | "failed";
 
