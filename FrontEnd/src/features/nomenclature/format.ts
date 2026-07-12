@@ -33,3 +33,9 @@ export function detectColumnType(
   }
   return "text";
 }
+
+// Имя колонки для отображения: подчёркивания -> пробелы.
+// Используется ТОЛЬКО для подписи в шапке, не для доступа к данным.
+export function formatColumnName(col: string): string {
+  return col.replace(/_/g, " ");
+}

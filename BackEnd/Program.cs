@@ -39,7 +39,7 @@ var app = builder.Build();
 
 app.UseCors();
 
-app.MapGet("/api/nomenclature", async (
+app.MapGet("/api/nomenclature/request/", async (
     INomenclatureHttpService nomenclatureService,   // DI подставит сервис автоматически
     CancellationToken cancellationToken) =>       // токен отмены от ASP.NET Core
 {

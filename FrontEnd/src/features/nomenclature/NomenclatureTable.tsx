@@ -11,6 +11,7 @@ import {
 import type { JsonValue } from "./types";
 import {
   detectColumnType,
+  formatColumnName,
   formatDate,
   isIsoDateTime,
   type ColumnType,
@@ -259,7 +260,7 @@ export function NomenclatureTable() {
               <thead>
                 <tr>
                   {columns.map((col) => (
-                    <th key={col}>{col}</th>
+                    <th key={col}>{formatColumnName(col)}</th>
                   ))}
                 </tr>
                 <tr className="filter-row">
