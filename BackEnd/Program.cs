@@ -8,10 +8,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<ApiCredentials>(builder.Configuration.GetSection("ApiCredentials"));
 
-builder.Services.AddCors(options =>
-    options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
-
 // Регистрируем типизированный HttpClient.
 // Фабрика создаёт и переиспользует HttpClient — не делаем new HttpClient() вручную.
 builder.Services.AddHttpClient<INomenclatureHttpService, NomenclatureHttpService>(
@@ -37,8 +33,6 @@ builder.Services.AddHttpClient<INomenclatureHttpService, NomenclatureHttpService
 });
 
 var app = builder.Build();
-
-app.UseCors();
 
 app.MapGet("/api/nomenclature/request/", async (
     INomenclatureHttpService nomenclatureService,   // DI подставит сервис автоматически

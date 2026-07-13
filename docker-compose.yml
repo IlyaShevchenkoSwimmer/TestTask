@@ -2,8 +2,8 @@ services:
   backend:
     build:
       context: ./BackEnd
-    container_name: myapp-backend
-    # Секреты (логин/пароль/RequestText) берём из backend/.env
+    container_name: TestTask-backend
+    # Секреты (логин/пароль) берём из backend/.env
     env_file:
       - ./BackEnd/.env
     # Переопределяем то, что в Docker должно отличаться
@@ -21,7 +21,7 @@ services:
   frontend:
     build:
       context: ./FrontEnd
-    container_name: myapp-frontend
+    container_name: TestTask-frontend
     ports:
       - "3000:80" # приложение будет на http://localhost:3000
     depends_on:
